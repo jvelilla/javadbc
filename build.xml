@@ -35,7 +35,7 @@
 	<target name="usage">
 
 		<echo message=""/>
-		<echo message="dbc4java build file"/>
+		<echo message="javadbc build file"/>
 		<echo message="------------------------------------------------------"/>
 		<echo message=""/>
 		<echo message="Available targets are:"/>
@@ -45,6 +45,7 @@
 		<echo message="docs     --> Create complete Javadoc documentation"/>
 		<echo message="coverage  -->Create coverage reports"/>
 		<echo message="tests    --> Run tests using initialized database"/>
+		<echo message="jarfile    --> Create a binary distribution file of javadbc onto dist directory"/>
 		<echo message=""/>
 
 	</target>
