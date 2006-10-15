@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 
-<project name="dbc4java" basedir="." default="usage">
+<project name="javadbc" basedir="." default="usage">
 
-	<property name="name" value="dbc4java"/>
+	<property name="name" value="javadbc"/>
 
 	<property name="docs.dir" value="doc"/>
 	<property name="src.dir" value="src"/>
