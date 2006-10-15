@@ -105,7 +105,7 @@ public class ContractAspect {
 	 */
 	
 
-	@Around("execution(public * ((@org.dbc4java.attributes.DBC *)+).*(..))") 
+	@Around("execution(public * ((@org.javadbc.attributes.DBC *)+).*(..))") 
 	// TODO revisar la expresion para poder 
 	//+
 	//		" && (@annotation(org.dbc4java.attributes.Require ) || @annotation(org.dbc4java.attributes.Ensure)" +
