@@ -1,0 +1,275 @@
+<?xml version="1.0"?>
+
+<project name="dbc4java" basedir="." default="usage">
+
+	<property name="name" value="dbc4java"/>
+
+	<property name="docs.dir" value="doc"/>
+	<property name="src.dir" value="src"/>
+	<property name="build.dir" value=".classes"/>
+	<property name="buildtest.dir" value=".classesTest"/>
+	<property name="dist.dir" value="dist"/>
+
+	<property name="test.dir" value="test"/>
+	<property name="testbuild.dir" value=".testclasses"/>
+	<property name="testreports.dir" value="junit-reports"/>
+	<property name="testhtml.dir" value="${testreports.dir}/html"/>
+
+
+	<property file="build.properties"/>
+
+
+	<path id="master-classpath">
+		<fileset dir="${lib.dir}">
+			<include name="*.jar"/>
+		</fileset>
+		
+		<fileset dir="${cobertura.lib}">
+				<include name="**/*.jar"/>
+		</fileset>
+
+	</path>
+
+	<taskdef classpathref="master-classpath" resource="tasks.properties"/>
+
+	<target name="usage">
+
+		<echo message=""/>
+		<echo message="dbc4java build file"/>
+		<echo message="------------------------------------------------------"/>
+		<echo message=""/>
+		<echo message="Available targets are:"/>
+		<echo message=""/>
+		<echo message="clean    --> Clean output dirs"/>
+		<echo message="build    --> Compile main Java sources and copy libraries"/>
+		<echo message="docs     --> Create complete Javadoc documentation"/>
+		<echo message="coverage  -->Create coverage reports"/>
+		<echo message="tests    --> Run tests using initialized database"/>
+		<echo message=""/>
+
+	</target>
+
+	<target name="jarfile" depends="build" description="Build the dbc4java application archive">
+		<mkdir dir="${dist.dir}"/>
+
+		<jar jarfile="${dist.dir}/${name}.jar" basedir="${build.dir}" >
+			<include name="**/*"/>
+		</jar>
+	</target>
+
+
+	<target name="clean" description="Clean output dirs (build, docs, testbuild, testreports, weblib, dist)">
+
+		<delete>
+			<fileset dir="${build.dir}">
+				<!-- AOP meta-inf -->
+				<include name="META-INF/*"/>
+			</fileset>
+		</delete>
+		<delete dir="${docs.dir}"/>
+		<delete dir="${testbuild.dir}"/>
+		<delete dir="${testreports.dir}"/>
+		<delete dir="${dist.dir}"/>
+
+	</target>
+
+
+	<target name="build" description="Compile main source tree java files into class files, generate jar files">
+
+		<mkdir dir="${build.dir}"/>
+		<javac destdir="${build.dir}" source="1.5" target="1.5" debug="true"
+				deprecation="false" optimize="false"  failonerror="true">
+			<src path="${src.dir}"/>
+			<classpath refid="master-classpath"/>
+		</javac>
+
+		<copy todir="${webclasses.dir}" preservelastmodified="true">
+			<fileset dir="${src.dir}">
+				<!-- AOP meta-inf -->
+				<include name="META-INF/*"/>
+			</fileset>
+			<fileset dir="${build.dir}">
+				 <include name="**/*"/>
+				 <exclude name="**/*Test.*"/>
+			</fileset>
+
+		</copy>
+		
+	</target>
+
+	
+	<target name="buildtest" description="Compile main source tree java files into class files, generate jar files">
+
+			<mkdir dir="${buildtest.dir}"/>
+			<javac destdir="${buildtest.dir}" source="1.5" target="1.5" debug="true"
+					deprecation="false" optimize="false" failonerror="true"  >
+				<src path="${src.dir}"/>
+				<classpath refid="master-classpath"/>
+			</javac>
+			<javac destdir="${buildtest.dir}" source="1.5" target="1.5" debug="true"
+						deprecation="false" optimize="false" failonerror="true">
+					<src path="${test.dir}"/>
+					<classpath refid="master-classpath"/>
+			</javac>
+	</target>
+
+
+	<target name="docs" description="Create complete Javadoc documentation">
+
+			<delete dir="${docs.dir}"/>
+
+			<mkdir dir="${docs.dir}"/>
+
+			<javadoc sourcepath="${src.dir}" destdir="${docs.dir}" windowtitle="eTaining"
+					source="1.5" author="true" version="true" use="true" packagenames="*">
+				<doctitle><![CDATA[<h1>dbc4java</h1>]]></doctitle>
+				<bottom><![CDATA[<i>Javier Velilla</i>]]></bottom>
+				<classpath refid="master-classpath"/>
+			</javadoc>
+
+			<javadoc sourcepath="${test.dir}" destdir="${docs.dir}" windowtitle="eTaining"
+							source="1.5" author="true" version="true" use="true" packagenames="*">
+						<doctitle><![CDATA[<h1>dbc4java</h1>]]></doctitle>
+						<bottom><![CDATA[<i>Javier Velilla</i>]]></bottom>
+						<classpath refid="master-classpath"/>
+			</javadoc>
+	 </target>
+
+	<!--target name="dist" depends="warfile">
+			Delegate to warfile target by depending on it. dist is just to offer
+			a generic target name across all Spring sample apps that may be used
+			for autobuilds testing.
+	</target-->
+
+
+	
+	<!-- ============================================================================================
+	                      COBERTURA SET UP
+	     ============================================================================================ -->
+	                       
+	
+	<target name="instrument" depends="buildtest">
+		<!--
+			Remove the coverage data file and any old instrumentation.
+		-->
+		<delete file="${coverage.dir}/basic_coverage.ser"/>
+		<delete dir="${instrumented.dir}" />
+
+		<!--
+			Instrument the application classes, writing the
+			instrumented classes into ${build.instrumented.dir}.
+		-->
+		<cobertura-instrument todir="${instrumented.dir}">
+			<!--
+				The following line causes instrument to ignore any
+				source line containing a reference to log4j, for the
+				purposes of coverage reporting.
+			-->
+			<ignore regex="org.apache.log4j.*" />
+
+			<fileset dir="${buildtest.dir}">
+				<!--
+					Instrument all the application classes, but
+					don't instrument the test classes.
+				-->
+				<include name="**/*.class" />
+				<exclude name="**/Test*.class" />
+			</fileset>
+		</cobertura-instrument>
+	</target>
+
+	
+	<target name="test" depends="buildtest">
+		<junit fork="yes" dir="${basedir}" failureProperty="test.failed">
+			<!--
+				Note the classpath order: instrumented classes are before the
+				original (uninstrumented) classes.  This is important.
+			-->
+			<classpath location="${instrumented.dir}" />
+			<classpath location="${buildtest.dir}" />
+
+			<!--
+				The instrumented classes reference classes used by the
+				Cobertura runtime, so Cobertura and its dependencies
+				must be on your classpath.
+			-->
+			<classpath refid="master-classpath" />
+
+			<formatter type="xml" />
+			<test name="${testcase}" todir="${reports.xml.dir}" if="testcase" />
+			<batchtest todir="${reports.xml.dir}" unless="testcase">
+				<fileset dir="${test.dir}/">
+					<include name="**/*Test.java" />
+				</fileset>
+			</batchtest>
+		</junit>
+
+		<junitreport todir="${reports.xml.dir}">
+			<fileset dir="${reports.xml.dir}">
+				<include name="TEST-*.xml" />
+			</fileset>
+			<report format="frames" todir="${reports.html.dir}" />
+		</junitreport>
+	</target>
+	
+	<target name="coverage-report">
+		<cobertura-report destdir="${coverage.xml.dir}" format="xml">
+				<fileset dir="${src.dir}">
+					<include name="**/*.java"/>
+				</fileset>
+				<fileset dir="${test.dir}">
+							<include name="**/*.java"/>
+				</fileset>
+			</cobertura-report>	
+		  <cobertura-report destdir="${coverage.html.dir}">
+							<fileset dir="${src.dir}">
+								<include name="**/*.java"/>
+							</fileset>
+							<fileset dir="${test.dir}">
+							<include name="**/*.java"/>
+						</fileset>
+		</cobertura-report>
+	</target>
+	
+
+	<target name="alternate-coverage-report">
+			<!--
+				Generate a series of HTML files containing the coverage
+				data in a user-readable form using nested source filesets.
+			-->
+			<cobertura-report destdir="${coverage.html.dir}">
+				<fileset dir="${src.dir}">
+					<include name="**/*.java"/>
+				</fileset>
+				<fileset dir="${test.dir}">
+						<include name="**/*.java"/>
+				</fileset>
+			</cobertura-report>
+	</target>
+	
+	
+	
+	<target name="cleaner" description="Remove all files created by the build/test process.">
+		<delete dir="${buildtest.dir}" />
+		<delete dir="${instrumented.dir}" />
+		<delete dir="${reports.dir}" />
+		<delete dir="${coverage.dir}" />
+		<delete file="cobertura.log" />
+		<delete file="cobertura.ser" />
+	</target>
+	
+	<target name="init" description="Create all directories by the build/test/coverage process.">
+	  		<mkdir dir="${instrumented.dir}" />
+			<mkdir dir="${reports.xml.dir}" />
+			<mkdir dir="${reports.html.dir}" />
+			<mkdir dir="${coverage.xml.dir}" />
+			<mkdir dir="${coverage.html.dir}" />
+	</target>
+
+	<target name="coverage" depends="cleaner,init,instrument,test,alternate-coverage-report" description="Compile, instrument ourself, run the tests and generate JUnit and coverage reports."/>
+
+	
+
+
+
+</project>
