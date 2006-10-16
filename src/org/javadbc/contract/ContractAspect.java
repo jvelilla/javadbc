@@ -173,7 +173,9 @@ public class ContractAspect {
 		}
 
 		Object retVal = pjp.proceed();
-
+		
+		
+		if (checkContracts.get() == null){
 		// execute and remove the result-references
 		// TODO revisar
 		if (ensure != null) {
@@ -227,6 +229,7 @@ public class ContractAspect {
 
 		log.info("Invariant:" +invariant );
 		assertExpressionTrue(pjp, invariant, "invariant violated: {0}");
+		}
 		return retVal;
 	}
 
@@ -242,7 +245,7 @@ public class ContractAspect {
 			String expression) {
 		Map context = createContext(invocation);
 		try {
-			return executeExpression(expression, invocation.getThis(), context);
+			return executeExpression(expression, invocation.getTarget(), context);
 		} catch (Exception e) {
 			throw new RuntimeException("Could not execute: " + expression, e);
 		}
@@ -252,7 +255,7 @@ public class ContractAspect {
 			String expression, String message) {
 		if (expression != null) {
 			Map context = createContext(invocation);
-			assertExpressionTrue(expression, invocation.getThis(), context,
+			assertExpressionTrue(expression, invocation.getTarget(), context,
 					MessageFormat.format(message, new Object[] { expression }));
 		}
 	}
@@ -260,7 +263,7 @@ public class ContractAspect {
 	private static Map createContext(ProceedingJoinPoint invocation) {
 
 		Map variables = Ognl.createDefaultContext(invocation.getTarget());
-		variables.put("this", invocation.getThis());
+		variables.put("this", invocation.getTarget());
 		Object[] args = invocation.getArgs();
 		if (args != null) {
 			for (int i = 0; i < args.length; i++) {
