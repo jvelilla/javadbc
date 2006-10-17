@@ -140,7 +140,7 @@ public class ContractAspect {
 		// Evaluate Preconditions
 		// Invariants && Preconditions 
 		if (checkContracts.get() == null) {
-			assertExpressionTrue(pjp, invariant, "invariant violated: {0}");
+			//assertExpressionTrue(pjp, invariant, "invariant violated: {0}");
 			assertExpressionTrue(pjp, require, "precondition violated: {0}");
 			
 			// execute and remove the old-references
