@@ -16,9 +16,11 @@ import ognl.Ognl;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.aspectj.lang.JoinPoint;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
+import org.aspectj.lang.reflect.ConstructorSignature;
 import org.aspectj.lang.reflect.MethodSignature;
 import org.javadbc.attributes.Ensure;
 import org.javadbc.attributes.Invariant;
@@ -39,33 +41,32 @@ import org.springframework.util.StringUtils;
  * Ejemplo de metodos
  * @author jvelilla
  * @version 1. 0 based on Jon Tirsen Nanning AspectJ
- * http://nanning.codehaus.org/overview.html
+ *          http://nanning.codehaus.org/overview.html
  * 
- * Implementation Issue
- * ====================
- * Public methods need to check contracts (ok)
- * Contract execution needs to be synchronized (ok)
- * Public static methods need to check contract (ok)
- * No contracts in private methods(ok)
- * No checking in methods invoked from another method of the same class (not implemented)
- * Checking of contracts in constructor should occur before the call to the superclass constructor (not yet implemented (Critical))
+ * Implementation Issue ==================== Public methods need to check
+ * contracts (ok) Contract execution needs to be synchronized (ok) Public static
+ * methods need to check contract (ok) No contracts in private methods(ok) No
+ * checking in methods invoked from another method of the same class (not
+ * implemented) Checking of contracts in constructor should occur before the
+ * call to the superclass constructor (not yet implemented (Critical))
  * 
- * Support old Expresion but implement semantic by reference -->(should be good if we can check if the class implements Cloneable, then we could 
- * warning the user when he/she is using semantic by copy or semantic by reference.
- * old only can be used in a postcondition
+ * Support old Expresion but implement semantic by reference -->(should be good
+ * if we can check if the class implements Cloneable, then we could warning the
+ * user when he/she is using semantic by copy or semantic by reference. old only
+ * can be used in a postcondition
  * 
- * Support result, it permits us obtain the method return value and only can be used in a postcondition.
+ * Support result, it permits us obtain the method return value and only can be
+ * used in a postcondition.
  * 
- * Actually, we don't support implies, but it can be emulated whit basic Prepositional operators.
- * Example a implies b 
- * (a -> b) 
- * Then we can transform this in ((!a) || b) is like(¬a) v b). 
+ * Actually, we don't support implies, but it can be emulated whit basic
+ * Prepositional operators. Example a implies b (a -> b) Then we can transform
+ * this in ((!a) || b) is like(¬a) v b).
  * 
- * Actually, we don't support existencial and universal quantifiers (exist and forAll) 
- * These can be emulated using function in the Expression, but this function should be 
- * free effect colateral
- *   
- *  
+ * Actually, we don't support existencial and universal quantifiers (exist and
+ * forAll) These can be emulated using function in the Expression, but this
+ * function should be free effect colateral
+ * 
+ * 
  */
 
 @Aspect
@@ -83,6 +84,10 @@ public class ContractAspect {
 
 	private static final String classPattern = "class";
 
+	private static final String constructorCall = "constructor-call";
+
+	private static final String methodCall = "method-call";
+
 	private static final String preKey = "pre";
 
 	private static final String postKey = "post";
@@ -97,61 +102,84 @@ public class ContractAspect {
 
 	/**
 	 * Matches the execution of any public method with the Contract annotation
-	 * set. Los constructores son interceptados pero por el momento no esta implementado
+	 * set or any constructor.
 	 * 
 	 * @see org.javadbc.attributes.Ensure
 	 * @see org.javadbc.attributes.Require
 	 * @see org.javadbc.attributes.Invariant
 	 */
-	
 
-	@Around("execution(public * ((@org.javadbc.attributes.DBC *)+).*(..))") 
-	// TODO revisar la expresion para poder 
-	//+
-	//		" && (@annotation(org.dbc4java.attributes.Require ) || @annotation(org.dbc4java.attributes.Ensure)" +
-	//		"    || @annotation(org.dbc4java.attributes.Invariant))") 
-    // || "+
-	//		 "execution(new(..)) && !within(org.dbc4java.contract.ContractAspect)")
+	@Around("call(public * ((@org.javadbc.attributes.DBC *)+).*(..)) "
+			+ "||  (execution (((@org.javadbc.attributes.DBC *)+).new(..))  && !within(org.javadbc.contract.ContractAspect)) ")
 	public Object doAssert(ProceedingJoinPoint pjp) throws Throwable {
 		// start assert
 		// evaluate preconditions and invariants
 		// calculate old values
+		//Map<String, String> assertions = new HashMap<String, String>();
+		String targetClass = StringUtils.replace(
+				pjp.getTarget().getClass().toString(), classPattern, "").trim();
 
-		// TODO Contemplar el problema de interceptar constructores
-		MethodSignature methodSignature = (MethodSignature) pjp.getSignature();
-		
-		Map<String, String> assertions = new HashMap<String, String>();
-		addAssertions(methodSignature.getDeclaringTypeName(), methodSignature
-				.getName(), assertions);
+		Feature feature = null;
+		if (pjp.getKind().equalsIgnoreCase(methodCall)) {
 
-		String require = assertions.get(preKey);
-		String ensure = assertions.get(postKey);
-		String invariant = assertions.get(invKey);
+			feature = new Operation();
+			MethodSignature methodSignature = (MethodSignature) pjp
+					.getSignature();
+			feature.setFeatureName(methodSignature.getDeclaringTypeName() + "."
+					+ methodSignature.getName());
+			feature.execute(targetClass, methodSignature.getName());
+
+		} else {
+			ConstructorSignature constructorSignature = (ConstructorSignature) pjp
+					.getSignature();
+			feature = new Constructor();
+			System.out.println(constructorSignature.getParameterNames());
+			
+			String[] params=constructorSignature.getParameterNames();
+			String listParam="";
+			for (int i = 0; i < params.length; i++) {
+				if ("".equals(listParam)){
+				listParam +=  params[i] + " " ;
+				} else{
+					listParam += " , " + params[i] + " " ;
+				}
+			}
+			feature.setFeatureName(constructorSignature.getConstructor().getName() + "(" +listParam + ")");
+			feature.execute(targetClass, constructorSignature.getConstructor()
+					.getName());
+
+		}
+		// addAssertions(methodSignature.getDeclaringTypeName(), methodSignature
+		// .getName(), assertions);
+
+		String require = feature.getPreconditions();
+		String ensure = feature.getPostconditions();
+		String invariant = feature.getInvariants();
 
 		StringBuffer parsedEnsure = null;
 		List oldValues = null;
 		List resultValues = null;
 
-		// log.info("require: [" + require + "]");
-		// log.info("ensure: [" + ensure + "]");
-		// log.info("invariant: [" + invariant + "]");
-		log.info("Precondition:" + require);
+		 log.info("Precondition for "+ feature.getFeatureName()+ " : " + require);
 
+		log.info("Precondition:" + require);
 		// Evaluate Preconditions
-		// Invariants && Preconditions 
+		// Invariants && Preconditions
 		if (checkContracts.get() == null) {
-			//assertExpressionTrue(pjp, invariant, "invariant violated: {0}");
+			if (pjp.getKind().equalsIgnoreCase(methodCall)){
+				 assertExpressionTrue(pjp, invariant, "invariant violated: {0}");
+			}
 			assertExpressionTrue(pjp, require, "precondition violated: {0}");
-			
+
 			// execute and remove the old-references
-			// TODO: revisar 
+			// TODO: revisar
 			if (ensure != null) {
 				oldValues = new ArrayList();
 				parsedEnsure = new StringBuffer();
 				Matcher matcher = oldPattern.matcher(ensure);
 				while (matcher.matches()) {
 					String head = matcher.group(1);
-					log.info("head:" + head);
+					// log.info("head:" + head);
 					String old = matcher.group(2);
 					String tail = matcher.group(3);
 					oldValues.add(executeExpression(pjp, old));
@@ -159,7 +187,7 @@ public class ContractAspect {
 					parsedEnsure.append(head + oldRef + tail);
 					StringBuffer newParsedEnsure = new StringBuffer();
 					newParsedEnsure.append(head + oldRef + tail);
-					parsedEnsure=newParsedEnsure;
+					parsedEnsure = newParsedEnsure;
 					matcher = oldPattern.matcher(newParsedEnsure.toString());
 				}
 				// if there wasn't any old-references just addLink all of the
@@ -173,62 +201,62 @@ public class ContractAspect {
 		}
 
 		Object retVal = pjp.proceed();
-		
-		
-		if (checkContracts.get() == null){
-		// execute and remove the result-references
-		// TODO revisar
-		if (ensure != null) {
-			resultValues = new ArrayList();
-			parsedEnsure = new StringBuffer();
-			Matcher matcher = resultPattern.matcher(ensure);
-			while (matcher.matches()) {
-				String head = matcher.group(1);
-				log.info("head:" + head);
-				String tail = matcher.group(2);
-				resultValues.add(retVal);
-				String resultRef = "#"
-						+ getResultReference(resultValues.size() - 1);
-				parsedEnsure.append(head + resultRef + tail);
-				StringBuffer newParsedEnsure = new StringBuffer();
-				newParsedEnsure.append(head + resultRef + tail);
-				parsedEnsure=newParsedEnsure;
-				matcher = resultPattern.matcher(newParsedEnsure.toString());
-			}
-			// if there wasn't any result-references just addLink all of the
-			// expression
-			if (resultValues.size() == 0) {
-				parsedEnsure.append(ensure);
-			}
-		}
-		// evaluate postconditions && invariants
-		// check ensures with old-references
-		if (parsedEnsure != null) {
-			Map context = createContext(pjp);
-			if (oldValues != null) {
-				for (ListIterator iterator = oldValues.listIterator(); iterator
-						.hasNext();) {
-					Object oldValue = iterator.next();
-					context.put(getOldReference(iterator.previousIndex()),
-							oldValue);
-				}
-			}
-			if (resultValues != null) {
-				for (ListIterator iterator = resultValues.listIterator(); iterator
-						.hasNext();) {
-					Object resultValue = iterator.next();
-					context.put(getResultReference(iterator.previousIndex()),
-							resultValue);
-				}
-			}
-			log.info("Postcondition:" +parsedEnsure.toString() );
-			
-			assertExpressionTrue(parsedEnsure.toString(), pjp.getThis(),
-					context, "postcondition violated: " + ensure);
-		}
 
-		log.info("Invariant:" +invariant );
-		assertExpressionTrue(pjp, invariant, "invariant violated: {0}");
+		if (checkContracts.get() == null) {
+			// execute and remove the result-references
+			// TODO revisar
+			if (ensure != null) {
+				resultValues = new ArrayList();
+				parsedEnsure = new StringBuffer();
+				Matcher matcher = resultPattern.matcher(ensure);
+				while (matcher.matches()) {
+					String head = matcher.group(1);
+					log.info("head:" + head);
+					String tail = matcher.group(2);
+					resultValues.add(retVal);
+					String resultRef = "#"
+							+ getResultReference(resultValues.size() - 1);
+					parsedEnsure.append(head + resultRef + tail);
+					StringBuffer newParsedEnsure = new StringBuffer();
+					newParsedEnsure.append(head + resultRef + tail);
+					parsedEnsure = newParsedEnsure;
+					matcher = resultPattern.matcher(newParsedEnsure.toString());
+				}
+				// if there wasn't any result-references just addLink all of the
+				// expression
+				if (resultValues.size() == 0) {
+					parsedEnsure.append(ensure);
+				}
+			}
+			// evaluate postconditions && invariants
+			// check ensures with old-references
+			if (parsedEnsure != null) {
+				Map context = createContext(pjp);
+				if (oldValues != null) {
+					for (ListIterator iterator = oldValues.listIterator(); iterator
+							.hasNext();) {
+						Object oldValue = iterator.next();
+						context.put(getOldReference(iterator.previousIndex()),
+								oldValue);
+					}
+				}
+				if (resultValues != null) {
+					for (ListIterator iterator = resultValues.listIterator(); iterator
+							.hasNext();) {
+						Object resultValue = iterator.next();
+						context.put(
+								getResultReference(iterator.previousIndex()),
+								resultValue);
+					}
+				}
+				log.info("Postcondition for: " + feature.getFeatureName() + " : " + parsedEnsure.toString());
+
+				assertExpressionTrue(parsedEnsure.toString(), pjp.getTarget(),
+						context, "postcondition violated: " + ensure);
+			}
+
+			log.info("Invariant for: " + feature.getFeatureName() +  " : "+ invariant);
+			assertExpressionTrue(pjp, invariant, "invariant violated: {0}");
 		}
 		return retVal;
 	}
@@ -245,7 +273,8 @@ public class ContractAspect {
 			String expression) {
 		Map context = createContext(invocation);
 		try {
-			return executeExpression(expression, invocation.getTarget(), context);
+			return executeExpression(expression, invocation.getTarget(),
+					context);
 		} catch (Exception e) {
 			throw new RuntimeException("Could not execute: " + expression, e);
 		}
@@ -311,135 +340,139 @@ public class ContractAspect {
 		return Ognl.getValue(Ognl.parseExpression(expression), context, root);
 	}
 
-	private String getInvariant(Method method) {
-		Invariant invariant = method.getDeclaringClass().getAnnotation(
-				Invariant.class);
-		return invariant != null ? invariant.value() : null;
-	}
-
-	private String getPostcondition(Method method) {
-		Ensure ensure = method.getAnnotation(Ensure.class);
-		return ensure != null ? ensure.value() : null;
-	}
-
-	private String getPrecondition(Method method) {
-		Require require = method.getAnnotation(Require.class);
-		return require != null ? require.value() : null;
-	}
-
-	/**
-	 * assertion is a map that contains pre:OrExpresion or null pos:AndExpresion
-	 * or null inv:AndExpresion or null
-	 * 
-	 * @param targetClass
-	 * @param targetMethod
-	 * @param assertions
-	 */
-	private void addAssertions(String targetClass, String targetMethod,
-			Map<String, String> assertions) {
-		try {
-			// A class can implement many interfaces and extend only one class
-		java.lang.Class c = java.lang.Class.forName(targetClass);
-
-			if (c.toString().contains(classPattern)) {
-				Type[] type = c.getInterfaces();
-				if (type.length > 0) { // Class or Interface has one or more
-					// Inerfaces
-					for (Type type2 : type) {
-						String interfaceName = StringUtils.replace(
-								type2.toString(), interfacePattern, "").trim();
-						java.lang.Class i = java.lang.Class
-								.forName(interfaceName);
-						// An Interface can Extends Many Interfaces
-						addAssertions(interfaceName, targetMethod, assertions);
-						getAssertions(i, targetMethod, assertions);
-					}
-				}
-
-				Type clase = c.getSuperclass();
-				if (clase != null
-						&& !clase.toString().equals("class java.lang.Object")) {
-					// Una Interface no puede heredar de una Clase
-					String className = StringUtils.replace(clase.toString(),
-							classPattern, "").trim();
-					java.lang.Class i = java.lang.Class.forName(className);
-					// One Class can extend one class, and implement many
-					// interfaces
-					addAssertions(className, targetMethod, assertions);
-					getAssertions(i, targetMethod, assertions);
-
-				} else {
-					getAssertions(c, targetMethod, assertions);
-				}
-			} else { // Interfaces only can extend other interfaces 
-				Type[] type = c.getInterfaces();
-				if (type.length > 0) { 
-					for (Type type2 : type) {
-						String interfaceName = StringUtils.replace(
-								type2.toString(), interfacePattern, "").trim();
-						java.lang.Class i = java.lang.Class
-								.forName(interfaceName);
-						addAssertions(interfaceName, targetMethod, assertions);
-						getAssertions(i, targetMethod, assertions);
-					}
-				}
-			}
-		} catch (ClassNotFoundException e) {
-			log.error(": WARNING: ClassNotFound : [caught exception: " + e
-					+ "]");
-		}
-	}
-
-	/**
-	 * Recupera las aserciones asociadas con una clase, Precondiciones,
-	 * Postcondiciones e Invariantes
-	 * 
-	 * @param classTarget
-	 * @param targetMethod
-	 * @param assertions
-	 *            TODO: mejorar el lookup de assertions
-	 */
-	private void getAssertions(java.lang.Class classTarget,
-			String targetMethod, Map<String, String> assertions) {
-		Method[] methods = classTarget.getMethods();
-		String pre = null;
-		String post = null;
-		String inv = null;
-		for (Method method : methods) {
-			if (method.getName().equals(targetMethod)) {
-				pre = getPrecondition(method);
-				post = getPostcondition(method);
-				inv = getInvariant(method);
-				if (log.isInfoEnabled()) {
-					log.info("Pre:" + pre);
-					log.info("Post:" + post);
-					log.info("Inv:" + inv);
-				}
-			}
-		}
-		if (assertions.containsKey(preKey) && pre != null) {
-			String newPre = assertions.get(preKey) + " || " + pre;
-			assertions.put(preKey, newPre);
-		} else {
-			if (!assertions.containsKey(preKey) && pre != null)
-				assertions.put(preKey, pre);
-		}
-		if (assertions.containsKey(postKey) && post != null) {
-			String newPost = assertions.get(postKey) + " && " + post;
-			assertions.put(postKey, newPost);
-		} else {
-			if (!assertions.containsKey(postKey) && post != null)
-				assertions.put(postKey, post);
-		}
-
-		if (assertions.containsKey(invKey) && post != null) {
-			String newPost = assertions.get(invKey) + " && " + inv;
-			assertions.put(invKey, newPost);
-		} else {
-			if (!assertions.containsKey(invKey) && inv != null)
-				assertions.put(invKey, inv);
-		}
-
-	}
+//	private String getInvariant(Method method) {
+//		Invariant invariant = method.getDeclaringClass().getAnnotation(
+//				Invariant.class);
+//		return invariant != null ? invariant.value() : null;
+//	}
+//
+//	private String getPostcondition(Method method) {
+//		Ensure ensure = method.getAnnotation(Ensure.class);
+//		return ensure != null ? ensure.value() : null;
+//	}
+//
+//	private String getPrecondition(Method method) {
+//		Require require = method.getAnnotation(Require.class);
+//		return require != null ? require.value() : null;
+//	}
+//
+//	/**
+//	 * assertion is a map that contains pre:OrExpresion or null pos:AndExpresion
+//	 * or null inv:AndExpresion or null
+//	 * 
+//	 * @param targetClass
+//	 * @param targetMethod
+//	 * @param assertions
+//	 */
+//	private void addAssertions(String targetClass, String targetMethod,
+//			Map<String, String> assertions) {
+//		try {
+//			// A class can implement many interfaces and extend only one class
+//			java.lang.Class c = java.lang.Class.forName(targetClass);
+//			Type clase = c.getSuperclass();
+//
+//			if (c.toString().contains(classPattern)) {
+//				Type[] type = c.getInterfaces();
+//				if (type.length > 0) { // Class or Interface has one or more
+//					// Inerfaces
+//					for (Type type2 : type) {
+//						String interfaceName = StringUtils.replace(
+//								type2.toString(), interfacePattern, "").trim();
+//						java.lang.Class i = java.lang.Class
+//								.forName(interfaceName);
+//						// An Interface can Extends Many Interfaces
+//						addAssertions(interfaceName, targetMethod, assertions);
+//						getAssertions(i, targetMethod, assertions);
+//					}
+//
+//				}
+//
+//				// Type clase = c.getSuperclass();
+//				if (clase != null
+//						&& !clase.toString().equals("class java.lang.Object")) {
+//					// Una Interface no puede heredar de una Clase
+//					String className = StringUtils.replace(clase.toString(),
+//							classPattern, "").trim();
+//					java.lang.Class i = java.lang.Class.forName(className);
+//					// One Class can extend one class, and implement many
+//					// interfaces
+//					addAssertions(className, targetMethod, assertions);
+//					getAssertions(i, targetMethod, assertions);
+//
+//				}
+//				getAssertions(c, targetMethod, assertions);
+//			} else { // Interfaces only can extend other interfaces
+//				Type[] type = c.getInterfaces();
+//				if (type.length > 0) {
+//					for (Type type2 : type) {
+//						String interfaceName = StringUtils.replace(
+//								type2.toString(), interfacePattern, "").trim();
+//						java.lang.Class i = java.lang.Class
+//								.forName(interfaceName);
+//						addAssertions(interfaceName, targetMethod, assertions);
+//						getAssertions(i, targetMethod, assertions);
+//					}
+//				}
+//			}
+//
+//		} catch (ClassNotFoundException e) {
+//			log.error(": WARNING: ClassNotFound : [caught exception: " + e
+//					+ "]");
+//		}
+//	}
+//
+//	/**
+//	 * Recupera las aserciones asociadas con una clase, Precondiciones,
+//	 * Postcondiciones e Invariantes
+//	 * 
+//	 * @param classTarget
+//	 * @param targetMethod
+//	 * @param assertions
+//	 *            TODO: mejorar el lookup de assertions
+//	 */
+//	private void getAssertions(java.lang.Class classTarget,
+//			String targetMethod, Map<String, String> assertions) {
+//
+//		Method[] methods = classTarget.getMethods();
+//		String pre = null;
+//		String post = null;
+//		String inv = null;
+//		for (Method method : methods) {
+//			if (method.getName().equals(targetMethod)) {
+//				pre = getPrecondition(method);
+//				post = getPostcondition(method);
+//				inv = getInvariant(method);
+//				// if (log.isInfoEnabled()) {
+//				// log.info("Pre:" + pre);
+//				// log.info("Post:" + post);
+//				// log.info("Inv:" + inv);
+//				// }
+//			}
+//		}
+//		if (assertions.containsKey(preKey) && pre != null) {
+//			String newPre = "(" + assertions.get(preKey) + " || " + pre + ")";
+//			assertions.put(preKey, newPre);
+//		} else {
+//			if (!assertions.containsKey(preKey) && pre != null)
+//				assertions.put(preKey, pre);
+//		}
+//		if (assertions.containsKey(postKey) && post != null) {
+//			String newPost = "(" + assertions.get(postKey) + " && " + post
+//					+ ")";
+//			assertions.put(postKey, newPost);
+//		} else {
+//			if (!assertions.containsKey(postKey) && post != null)
+//				assertions.put(postKey, post);
+//		}
+//
+//		if (assertions.containsKey(invKey) && post != null) {
+//			String newPost = "(" + assertions.get(invKey) + " && " + inv + ")";
+//			assertions.put(invKey, newPost);
+//		} else {
+//			if (!assertions.containsKey(invKey) && inv != null)
+//				assertions.put(invKey, inv);
+//		}
+//
+//	}
 
 }
