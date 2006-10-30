@@ -63,6 +63,7 @@ import java.lang.annotation.Target;
  * @author JVelilla
  * 
  */
+
 @Target( { ElementType.TYPE, ElementType.CONSTRUCTOR })
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
