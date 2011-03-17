@@ -17,8 +17,8 @@ public enum CheckLevel {
 	PRECONDITION("PRECONDITION"), 
 	POSTCONDITION("POSTCONDITION"), 
 	INVARIANT("INVARIANT"), 
-	DISABLE("DISABLE");
-
+	DISABLE("DISABLE"),
+    ALL("ALL");
 	private final String level;
 
 	CheckLevel(String level) {
